@@ -53,13 +53,6 @@ Desktop.ini
 $RECYCLE.BIN/
 
 
-###Linux###
-
-.*
-!.gitignore
-*~
-
-
 ###vim###
 
 .*.s[a-w][a-z]
