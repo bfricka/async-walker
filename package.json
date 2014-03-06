@@ -1,0 +1,19 @@
+{
+  "name": "async-walker",
+  "description": "Async, recursive directory walker with helpers",
+  "version": "0.0.1",
+  "private": false,
+  "author": "Brian Frichette",
+  "homepage": "https://github.com/brian-frichette/async-walker",
+  "contributors": [
+    "Brian Frichette <brian.frichette@piksel.com>"
+  ],
+  "main": "./src/walker.js",
+  "dependencies": {
+    "q": "~1.0.0",
+    "lodash": "~2.4.1",
+    "colors": "~0.6.2"
+  },
+  "keywords": ["async", "file", "filesystem", "directory", "walker", "recursive", "promise"],
+  "repository": ""
+}
