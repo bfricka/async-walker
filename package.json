@@ -1,7 +1,7 @@
 {
   "name": "async-walker",
   "description": "Async, recursive directory walker with helpers",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": false,
   "author": "Brian Frichette",
   "homepage": "https://github.com/brian-frichette/async-walker",
