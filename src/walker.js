@@ -4,8 +4,12 @@ var fs = require('fs');
 var path = require('path');
 var colors = require('colors');
 
-module.exports = function(dir) {
+function asyncWalker(dir, callback) {
   var max = 2000;
+
+  if (!this instanceof asyncWalker) {
+    return new asyncWalker(dir, callback);
+  }
 
   /**
    * Main asyncEntry
@@ -42,12 +46,10 @@ module.exports = function(dir) {
 
     max--;
 
-    var qReaddir = q.nfapply(fs.readdir, [dir])
+    return q.nfapply(fs.readdir, [dir])
       .then(function(list) {
         return mapPaths(dir, list);
       });
-
-    return qReaddir;
   }
 
   /**
@@ -61,12 +63,22 @@ module.exports = function(dir) {
     var statPromises = [];
 
     _.forEach(list, function(item) {
+      if (!item) return;
+
       var qStatPromise = q.nfapply(fs.stat, [item]).then(function(stat) {
-        return {
+        var itemStat = {
           path: item,
           isFile: stat.isFile(),
           isDirectory: stat.isDirectory()
         };
+
+        if (callback) {
+          itemStat = callback(itemStat);
+          // For filter
+          if (!itemStat) return;
+        }
+
+        return itemStat;
       }, function(err) {
         if (err) console.warn(err.message.orange);
       });
@@ -86,21 +98,21 @@ module.exports = function(dir) {
    * list of files when all promises have been resolved
    */
   function getFiles(list) {
-    console.log('getFiles called');
     var files = [];
     var promises = [];
 
     _.forEach(list, function(item) {
+      if (!item) return;
+
       if (item.isDirectory) {
         promises.push(walkAsync(item.path));
-      } else if (item.isFile){
+      } else if (item.isFile) {
         files.push(item.path);
       }
     });
 
     var allPromises = q.all(promises).then(function(list) {
-      files.push(list);
-      return _.flatten(files);
+      return _.flatten(files.concat(list));
     });
 
     return allPromises;
@@ -119,4 +131,34 @@ module.exports = function(dir) {
   }
 
   return walkAsync(dir);
-};
+}
+
+(function(aw) {
+  function _createFilterFn(callback, matchDirectories) {
+    return function(itemStat) {
+      var toAdd = (itemStat.isDirectory && !matchDirectories) ? true : !!callback(itemStat.path);
+      return toAdd ? itemStat : void 0;
+    };
+  }
+
+  function _createMapFn(callback) {
+    return function(itemStat) {
+      if (itemStat.isDirectory) return itemStat;
+      itemStat.path = callback(itemStat.path);
+      return itemStat;
+    };
+  }
+
+  _.extend(aw, {
+    filter: function(dir, callback, matchDirectories) {
+      var filterFn = _createFilterFn(callback, matchDirectories);
+      return aw(dir, filterFn);
+    },
+    map: function(dir, callback) {
+      var mapFn = _createMapFn(callback);
+      return aw(dir, mapFn);
+    }
+  });
+}(asyncWalker));
+
+module.exports = asyncWalker;
