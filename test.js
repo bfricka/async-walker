@@ -18,3 +18,7 @@ walker.filter('./node_modules', function(item){
 }, true).then(function(items) {
   console.log("Results from filter:\n".green, items);
 });
+
+walker('./node_modules', true).then(function(folders) {
+  console.log("Directories:\n".green, folders);
+});

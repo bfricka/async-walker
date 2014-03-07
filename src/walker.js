@@ -4,29 +4,77 @@ var fs = require('fs');
 var path = require('path');
 var colors = require('colors');
 
-function asyncWalker(dir, callback) {
-  var max = 2000;
+var defaultConfig = {
+  callback: null,
+  maxDepth: Infinity,
+  maxIterations: 500,
+  directoryMode: false
+};
 
-  if (!this instanceof asyncWalker) {
-    return new asyncWalker(dir, callback);
+/**
+ * Main module function. Performs all async walking
+ * @param  {string} dir               - Path to walk
+ * @param  {object|function} [config] - Optional config object or callback
+ * @param  {boolean} [directoryMode]  - Optional param to indicate directory instead of file mode
+ * @return {object}                   - Q.promise that resolves to results array.
+ */
+function asyncWalker(dir, config, directoryMode) {
+  var defaults = _.clone(defaultConfig);
+
+  if (config) {
+    if (_.isFunction(config)) {
+      defaults.callback = config;
+      config = defaults;
+
+      if (arguments.length > 2) config.directoryMode = directoryMode;
+    } else {
+      config = _.defaults(config, defaults);
+    }
+  } else {
+    config = defaults;
   }
+
+  var depth = 0;
+  var iterations = 0;
+  var hasMaxDepth = _.isFinite(config.maxDepth);
+  var hasMaxIterations = _.isFinite(config.maxIterations);
+  var hasRecursionLimits = hasMaxDepth || hasMaxDepth;
 
   /**
    * Main asyncEntry
-   * @param  {string} dir qualified directory to search
-   * @return {object}     Promise
+   * @param  {string} dir - Qualified directory to search
+   * @return {object}     - Promise
    */
   function walkAsync(dir) {
+    var skip = false;
     var deferred = q.defer();
 
-    readdir(dir)
-      .then(statItems)
-      .then(getFiles)
-      .then(function(a) {
-        deferred.resolve(a);
-      }, function(b) {
-        deferred.reject("Error " + b);
-      });
+    if (hasRecursionLimits) {
+      if (hasMaxDepth) {
+        if (depth >= config.maxDepth) skip = true;
+        // TODO: Clearly this needs to be smarter than just ++, which has nothing
+        // to do w/ depth
+        depth++;
+      }
+
+      if (hasMaxIterations) {
+        if (iterations >= config.maxIterations) skip = true;
+        iterations++;
+      }
+    }
+
+    if (skip) {
+      deferred.resolve();
+    } else {
+      readdir(dir)
+        .then(statItems)
+        .then(getFiles)
+        .then(function(a) {
+          deferred.resolve(a);
+        }, function(b) {
+          deferred.reject("Error " + b);
+        });
+    }
 
     return deferred.promise;
   }
@@ -35,18 +83,12 @@ function asyncWalker(dir, callback) {
    * Async readdir that makes sure iterations doesn't get out of hand
    * maps directory contents to the qualified base, and returns
    * a promise intead of using callback style
-   * @param  {string} dir Directory to read
-   * @return {object}     fs.readdir wrapped in a promise
+   * @param  {string} dir - Directory to read
+   * @return {object}     - fs.readdir wrapped in a promise
    */
   function readdir(dir) {
-    if (max <= 0) {
-      console.error('Too much directory reading!'.red);
-      process.abort();
-    }
-
-    max--;
-
-    return q.nfapply(fs.readdir, [dir])
+    return q
+      .nfapply(fs.readdir, [dir])
       .then(function(list) {
         return mapPaths(dir, list);
       });
@@ -55,16 +97,14 @@ function asyncWalker(dir, callback) {
   /**
    * Gets the fs.stat object from each item in the list and
    * sends back an object w/ the relevant values set
-   * @param  {array} list List of paths to get fs.stat info for
-   * @return {object}     Promise that resolves to the array of normalized
+   * @param  {Array.<string>} list - List of paths to get fs.stat info for
+   * @return {object}     - Promise that resolves to the array of normalized
    * objects when all fs.stat promises resolve
    */
   function statItems(list) {
     var statPromises = [];
 
     _.forEach(list, function(item) {
-      if (!item) return;
-
       var qStatPromise = q.nfapply(fs.stat, [item]).then(function(stat) {
         var itemStat = {
           path: item,
@@ -72,7 +112,7 @@ function asyncWalker(dir, callback) {
           isDirectory: stat.isDirectory()
         };
 
-        if (callback) {
+        if (config.callback) {
           itemStat = callback(itemStat);
           // For filter
           if (!itemStat) return;
@@ -103,6 +143,15 @@ function asyncWalker(dir, callback) {
 
     _.forEach(list, function(item) {
       if (!item) return;
+
+      if (config.directoryMode) {
+        if (item.isDirectory) {
+          files.push(item.path);
+          promises.push(walkAsync(item.path));
+        }
+
+        return;
+      }
 
       if (item.isDirectory) {
         promises.push(walkAsync(item.path));
