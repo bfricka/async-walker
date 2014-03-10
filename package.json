@@ -1,7 +1,7 @@
 {
   "name": "async-walker",
   "description": "Async, recursive directory walker with helpers",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": false,
   "author": "Brian Frichette",
   "homepage": "https://github.com/brian-frichette/async-walker",
@@ -12,9 +12,17 @@
   "dependencies": {
     "q": "~1.0.0",
     "lodash": "~2.4.1",
-    "colors": "~0.6.2"
+    "chalk": "^0.4.0"
   },
-  "keywords": ["async", "file", "filesystem", "directory", "walker", "recursive", "promise"],
+  "keywords": [
+    "async",
+    "file",
+    "filesystem",
+    "directory",
+    "walker",
+    "recursive",
+    "promise"
+  ],
   "repository": "https://github.com/brian-frichette/async-walker.git",
   "license": "MIT"
 }

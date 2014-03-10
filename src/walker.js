@@ -2,7 +2,7 @@ var _ = require('lodash');
 var q = require('q');
 var fs = require('fs');
 var path = require('path');
-var colors = require('colors');
+var chalk = require('chalk');
 
 var defaultConfig = {
   callback: null,
@@ -19,6 +19,8 @@ var defaultConfig = {
  * @return {object}                   - Q.promise that resolves to results array.
  */
 function asyncWalker(dir, config, directoryMode) {
+  dir = path.normalize(dir); // Normalize so depth doesn't fail
+  // Setup and normalize configuration
   var defaults = _.clone(defaultConfig);
 
   if (config) {
@@ -34,11 +36,24 @@ function asyncWalker(dir, config, directoryMode) {
     config = defaults;
   }
 
-  var depth = 0;
-  var iterations = 0;
+  var originalDepth = getDepth(dir);
   var hasMaxDepth = _.isFinite(config.maxDepth);
+  var iterations = 0;
   var hasMaxIterations = _.isFinite(config.maxIterations);
   var hasRecursionLimits = hasMaxDepth || hasMaxDepth;
+
+  /**
+   * Get current path depth
+   * @param  {string} dir - Directory path
+   * @return {number}     - Current depth
+   */
+  function getDepth(dir) {
+    return dir.split(path.sep).length;
+  }
+
+  function getDepthFromBase(dir) {
+    return getDepth(dir) - originalDepth;
+  }
 
   /**
    * Main asyncEntry
@@ -50,11 +65,10 @@ function asyncWalker(dir, config, directoryMode) {
     var deferred = q.defer();
 
     if (hasRecursionLimits) {
-      if (hasMaxDepth) {
-        if (depth >= config.maxDepth) skip = true;
-        // TODO: Clearly this needs to be smarter than just ++, which has nothing
-        // to do w/ depth
-        depth++;
+      var currentDepth = getDepthFromBase(dir);
+      if (hasMaxDepth && currentDepth >= config.maxDepth) {
+        console.warn(chalk.yellow("Reached max depth (%d) in: " + dir), config.maxDepth);
+        skip = true;
       }
 
       if (hasMaxIterations) {
@@ -64,7 +78,7 @@ function asyncWalker(dir, config, directoryMode) {
     }
 
     if (skip) {
-      deferred.resolve();
+      deferred.resolve(void 0);
     } else {
       readdir(dir)
         .then(statItems)
@@ -113,14 +127,14 @@ function asyncWalker(dir, config, directoryMode) {
         };
 
         if (config.callback) {
-          itemStat = callback(itemStat);
+          itemStat = config.callback(itemStat);
           // For filter
           if (!itemStat) return;
         }
 
         return itemStat;
       }, function(err) {
-        if (err) console.warn(err.message.orange);
+        if (err) console.warn(chalk.yellow(err.message));
       });
 
       statPromises.push(qStatPromise);
@@ -149,7 +163,6 @@ function asyncWalker(dir, config, directoryMode) {
           files.push(item.path);
           promises.push(walkAsync(item.path));
         }
-
         return;
       }
 
@@ -160,11 +173,9 @@ function asyncWalker(dir, config, directoryMode) {
       }
     });
 
-    var allPromises = q.all(promises).then(function(list) {
-      return _.flatten(files.concat(list));
+    return q.all(promises).then(function(list) {
+      return _.flatten(files.concat(_.compact(list)));
     });
-
-    return allPromises;
   }
 
   /**
@@ -198,16 +209,15 @@ function asyncWalker(dir, config, directoryMode) {
     };
   }
 
-  _.extend(aw, {
-    filter: function(dir, callback, matchDirectories) {
-      var filterFn = _createFilterFn(callback, matchDirectories);
-      return aw(dir, filterFn);
-    },
-    map: function(dir, callback) {
-      var mapFn = _createMapFn(callback);
-      return aw(dir, mapFn);
-    }
-  });
+  aw.filter = function(dir, callback, matchDirectories) {
+    var filterFn = _createFilterFn(callback, matchDirectories);
+    return aw(dir, filterFn);
+  };
+
+  aw.map = function(dir, callback) {
+    var mapFn = _createMapFn(callback);
+    return aw(dir, mapFn);
+  };
 }(asyncWalker));
 
 module.exports = asyncWalker;

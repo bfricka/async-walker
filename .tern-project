@@ -1,12 +1,7 @@
 {
   "libs": [
-    "browser",
-    "jquery",
     "ecma5",
     "underscore"
   ],
-  "plugins": {
-    "angular": true,
-    "node": true
-  }
+  "plugins": { "node": {} }
 }
